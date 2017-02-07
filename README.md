@@ -3,8 +3,8 @@
 Ammcon server script for my personal use
 
 Install from GitHub
-Master:
 
+Master:
 pip install git+https://github.com/ammgws/ammcon.git@master
 
 Dev:
@@ -15,4 +15,3 @@ Requirements
 * Linux OS
 
 * AmmCon hardware hub
-ammcon
