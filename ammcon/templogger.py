@@ -92,7 +92,7 @@ Base.metadata.create_all(engine)
 class TempLogger(Thread):
     """Get current temperature and log to database."""
 
-    def __init__(self, interval=300):
+    def __init__(self, interval=60):
         Thread.__init__(self)
         # Disable daemon so that thread isn't killed during a file write
         self.daemon = False
@@ -133,6 +133,7 @@ class TempLogger(Thread):
                     session.commit()
                 except:
                     session.rollback()
+                    logging.error('Failed to write to DB')
                     raise
                 finally:
                     session.close()
