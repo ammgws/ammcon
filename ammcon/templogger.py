@@ -70,7 +70,7 @@ class TemperatureSchema(ModelSchema):
     """Marshmallow schema used to deserialise Temperature ORM."""
     class Meta:
         model = Temperature
-        dateformat = '%Y-%m-%d %H:%M:%S'
+        dateformat = 'iso'
 
     @post_dump(pass_many=True)
     def wrap_json_array(self, data, many=False):
