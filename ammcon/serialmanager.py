@@ -187,6 +187,9 @@ class SerialManager(Thread):
         """
         Destuffs a PPP-like byte-stuffed byte array.
         Input byte array is assumed to have the header and end flag bytes still present.
+        Returns byte array in the following format:
+            [HDR] [ACK] [DESC] [PAYLOAD] [CRC] [END]
+            1byte 1byte 2bytes <18bytes  1byte 1byte
         """
         destuffed_array = b''
         state = "WAIT_HDR"
@@ -195,11 +198,13 @@ class SerialManager(Thread):
 
             if state == "WAIT_HDR":
                 if hb == pcmd.hdr:
+                    destuffed_array += hb
                     state = "IN_MSG"
             elif state == "IN_MSG":
                 if hb == pcmd.esc:
                     state = "RECV_ESC"
                 elif hb == pcmd.end:
+                    destuffed_array += hb
                     state = "WAIT_HDR"
                 else:
                     destuffed_array += hb
@@ -233,6 +238,7 @@ class SerialManager(Thread):
         """Send commands to microcontroller via RS232.
         This function deals directly with the serial port.
         """
+
         # Perform byte stuffing
         command = self.stuff_bytes(command, method='PPP')
 
