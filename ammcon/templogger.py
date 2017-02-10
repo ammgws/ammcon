@@ -131,10 +131,9 @@ class TempLogger(Thread):
                 try:
                     session.add(data_log)
                     session.commit()
-                except:
+                except Exception as err:
                     session.rollback()
-                    logging.error('Failed to write to DB')
-                    raise
+                    logging.error('Failed to write to DB, %s' % err)
                 finally:
                     session.close()
             else:
