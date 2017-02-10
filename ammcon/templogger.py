@@ -110,8 +110,8 @@ class TempLogger(Thread):
         logging.info('############### Connected to zeroMQ server ###############')
 
     def run(self):
+        logging.info('############### Started templogger ###############')
         while self.stop_thread != 1:
-
             command = pcmd.micro_commands.get('temp', None)
             self.socket.send(command)
             logging.debug('Requesting temperature')
@@ -137,12 +137,17 @@ class TempLogger(Thread):
                     raise
                 finally:
                     session.close()
+            else:
+                logging.info("invalid CRC - not logging")
 
             # Break logging interval into 1sec sleeps so don't have to wait too long when quitting thread.
             for _ in range(self.interval):
                 sleep(1)
                 if self.stop_thread:
+                    logging.debug('Templogger thread stop trigger received, breaking out of sleep loop')
                     break
+
+        logging.debug('Templogger thread stop trigger received, stopping while loop')
 
     def stop(self):
         self.stop_thread = 1
