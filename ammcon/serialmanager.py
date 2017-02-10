@@ -30,10 +30,9 @@ class SerialManager(Thread):
         self.daemon = False  # Need thread to block
 
         # Setup CRC calculator instance. Used to check CRC of response messages
-        self.crc_calc = Crc(width=8,
+        self.crc_calc = CRC(width=8,
                             poly=pcmd.poly,
                             initvalue=pcmd.init)
-        self.serial_state = 'wait_hdr'
 
         # Setup zeroMQ REP socket for receiving commands
         context = zmq.Context()
@@ -51,11 +50,11 @@ class SerialManager(Thread):
     def run(self):
         # Keep looping, waiting for next request from zeromq client
         while True:
-            # Wait for next request from client
+            # Wait for next request from client (on ZMQ socket)
             command = self.socket.recv()
             logging.debug('Received command in queue: %s', command)
 
-            # Send command to microcontroller
+            # Send command to microcontroller (over serial port)
             self.send_command(command)
 
             # sleep(0.3)  # debugging empty response issue. shouldn't need this
@@ -63,11 +62,18 @@ class SerialManager(Thread):
             # Read in response from microcontroller
             # raw_response = self.get_response()  # unreliable
             raw_response = self.get_response_until(pcmd.end)  # may block forever
-            response = self.destuff_response(raw_response)
+            logging.debug('Raw response: %s', helpers.print_bytearray(raw_response))
+
+            # Destuff response
+            # Response should be in the following format:
+            # [HDR] [ACK] [DESC] [PAYLOAD] [CRC] [END]
+            # 1byte 1byte 2bytes <18bytes  1byte 1byte
+            response = self.destuff_bytes(raw_response, method='PPP')
+            logging.debug('Destuffed response: %s', helpers.print_bytearray(response))
 
             # Check CRC of destuffed command
-            if not self.check_crc(response):
-                logging.debug('Invalid CRC')
+            if not self.crc_calc.check_crc(response[4:-1]):
+                logging.warning('Invalid CRC received: %s', response[-2:-1])
                 response = 'invalid CRC'.encode()
 
             # Send response back to client
@@ -94,7 +100,7 @@ class SerialManager(Thread):
 
     def read_byte(self):
         """
-        Read one byte from serial port.
+        Read one byte from serial port's receive buffer.
         """
         read_byte = b''
         try:
@@ -111,6 +117,9 @@ class SerialManager(Thread):
               commands (tested on Windows and Linux), so this may block forever
               if microcontroller doesn't response for whatever reason.
         """
+
+        # TO DO: rewrite this as it will end prematurely if data byte contains end flag
+
         recvd_command = b''
         while True:
             in_byte = self.ser.read(size=1)
@@ -139,58 +148,96 @@ class SerialManager(Thread):
             bytes_waiting -= 1
         return recvd_command
 
-    def check_crc(self, destuffed_response):
-        """
-        Check the CRC from the received response with the calculated CRC
-        of the payload. If we calculate the CRC of the payload+received CRC
-        and it equals 0, then we know that the data is OK (up to whatever %
-        the bit error rate is for the CRC algorithm being used).
-        """
-        self.crc_calc.reset(value=pcmd.init)
-        self.crc_calc.process(destuffed_response[4:-1])
-        if self.crc_calc.final() != 0:
-            # Data is invalid/corrupted
-            logging.warning('CRC mismatch. Received: %s, Calculated: %s',
-                            destuffed_response[-2:-1],
-                            self.crc_calc.finalbytes())
-            return False
+    def stuff_bytes(self, byte_array, method='COBS'):
+        if method == 'COBS':
+            return self._stuff_bytes_cobs(byte_array)
+        elif method == 'PPP':
+            return self._stuff_bytes_ppp(byte_array)
         else:
-            return True
+            raise ValueError("method keyword must be 'PPP' or 'COBS'")
+
+    def destuff_bytes(self, byte_array, method='COBS'):
+        if method == 'COBS':
+            return self._destuff_bytes_cobs(byte_array)
+        elif method == 'PPP':
+            return self._destuff_bytes_ppp(byte_array)
+        else:
+            raise ValueError("method keyword must be 'PPP' or 'COBS'")
 
     @staticmethod
-    def destuff_response(raw_response):
+    def _stuff_bytes_ppp(byte_array):
         """
-        Response should be in the following format:
-        [HDR] [ACK] [DESC] [PAYLOAD] [CRC] [END]
-        1byte 1byte 2bytes <18bytes  1byte 1byte
+        Performs PPP-style byte-stuffing on the input byte array.
+        Bytes equal to the header, escape or end flag bytes will be escaped.
         """
-        logging.debug('Raw response: %s', helpers.print_bytearray(raw_response))
+        stuffed_array = b''
 
-        escaped = False
-        destuffed_payload = b''
-        for b in raw_response[4:-2]:  # get payload part of response
-            byte = bytes([b])  # convert int to byte in order to concatenate at the end
-            if byte == pcmd.esc and escaped is True:
-                destuffed_payload = destuffed_payload + byte
-            elif byte == pcmd.esc and escaped is False:
-                escaped = True
-            elif byte == pcmd.end:
-                break
+        for b in byte_array:
+            hb = bytes([b])
+            if hb not in [pcmd.hdr, pcmd.esc, pcmd.end]:
+                stuffed_array += hb
             else:
-                destuffed_payload = destuffed_payload + byte
+                stuffed_array += pcmd.esc
+                stuffed_array += hb
 
-        logging.debug('Destuffed payload: %s', helpers.print_bytearray(destuffed_payload))
+        return stuffed_array
 
-        return raw_response[:4] + destuffed_payload + raw_response[-2:]
+    @staticmethod
+    def _destuff_bytes_ppp(byte_array):
+        """
+        Destuffs a PPP-like byte-stuffed byte array.
+        Input byte array is assumed to have the header and end flag bytes still present.
+        """
+        destuffed_array = b''
+        state = "WAIT_HDR"
+        for b in byte_array:
+            hb = bytes([b])
+
+            if state == "WAIT_HDR":
+                if hb == pcmd.hdr:
+                    state = "IN_MSG"
+            elif state == "IN_MSG":
+                if hb == pcmd.esc:
+                    state = "RECV_ESC"
+                elif hb == pcmd.end:
+                    state = "WAIT_HDR"
+                else:
+                    destuffed_array += hb
+            elif state == "RECV_ESC":
+                destuffed_array += hb
+                state = "IN_MSG"
+
+        return destuffed_array
+
+    @staticmethod
+    def _stuff_bytes_cobs(byte_array):
+        """
+        Performs COBS (consistent overhead byte stuffing) on the input byte array.
+        """
+        stuffed_array = b''
+
+        # TO DO
+        pass
+
+    @staticmethod
+    def _destuff_bytes_cobs(byte_array):
+        """
+        Destuffs a COBS stuffed byte array.
+        """
+        destuffed_array = b''
+
+        # TO DO
+        pass
 
     def send_command(self, command):
         """Send commands to microcontroller via RS232.
         This function deals directly with the serial port.
         """
+        # Perform byte stuffing
+        command = self.stuff_bytes(command, method='PPP')
+
         # Calculate CRC for command
-        self.crc_calc.reset(value=pcmd.init)
-        self.crc_calc.process(command)
-        crc = self.crc_calc.finalbytes()
+        crc = self.crc_calc.calculate_crc(command)
 
         # Build up command byte array
         command_array = pcmd.hdr + command + crc + pcmd.end
@@ -228,7 +275,7 @@ class VirtualSerialPort(object):
 
         # TO DO: move CRC stuff to helper function
         # Setup CRC calculator instance. Used to check CRC of response messages
-        self.crc_calc = Crc(width=8,
+        self.crc_calc = CRC(width=8,
                             poly=pcmd.poly,
                             initvalue=pcmd.init)
 
@@ -241,27 +288,18 @@ class VirtualSerialPort(object):
         # Set sample payload for temperature command
         if ord(data[1:2]) in range(ord(b'\xD0'), ord(b'\xDF')):
             ack = pcmd.ack
-            from random import randrange
-            temp1 = randrange(1, 38)  # Random temperature value
-            temp2 = randrange(0, 76, 25)  # Random decimal for temperature: .0, .25, .50 or .75
-            humidity = randrange(10, 80, 5)  # Random humidity value
-            payload = bytes([temp1]) + bytes([temp2]) + bytes([humidity]) + b'\x00'
+            payload = self._generate_temp_payload()
         # Set sample payload for light command
         elif ord(data[1:2]) in range(ord(b'\xB0'), ord(b'\xBF')):
             ack = pcmd.ack
-            # Payload for light command consists of the inverse of the second byte of DESC
-            # To invert the byte, first convert byte string to integer,
-            # and then mask it to get the lower 16 bits, then convert back to byte string
-            payload = bytes([~data[2] & 0xFF])
+            payload = self._generate_general_payload(data)
         # Set generic payload for other commands
         else:
             ack = pcmd.nak
-            payload = bytes([~data[2] & 0xFF])
+            payload = self._generate_general_payload(data)
 
         # Calculate CRC for command
-        self.crc_calc.reset(value=pcmd.init)
-        self.crc_calc.process(payload)
-        crc = self.crc_calc.finalbytes()
+        crc = self.crc_calc.calculate_crc(payload)
 
         self._received = pcmd.hdr + ack + bytes([data[1]]) + bytes([data[2]]) + payload + crc + pcmd.end
         logging.debug('Response (virtual): %s', helpers.print_bytearray(self._received))
@@ -275,6 +313,21 @@ class VirtualSerialPort(object):
         self.in_waiting = len(read)
         return read
 
+    @staticmethod
+    def _generate_temp_payload(temp1=None, temp2=None, humidity=None):
+        from random import randrange
+        temp1 = temp1 or randrange(1, 38)  # Random temperature value
+        temp2 = temp2 or randrange(0, 76, 25)  # Random decimal for temperature: .0, .25, .50 or .75
+        humidity = humidity or randrange(10, 80, 5)  # Random humidity value
+        return bytes([temp1]) + bytes([temp2]) + bytes([humidity]) + b'\x00'
+
+    @staticmethod
+    def _generate_general_payload(data):
+        # Payload for light command consists of the inverse of the second byte of DESC
+        # To invert the byte, first convert byte string to integer,
+        # and then mask it to get the lower 16 bits, then convert back to byte string
+        return bytes([~data[2] & 0xFF])
+
     def reset_input_buffer(self):
         pass
 
@@ -283,3 +336,44 @@ class VirtualSerialPort(object):
 
     def flush(self):
         pass
+
+
+class CRC(object):
+    def __init__(self, width, poly, initvalue):
+        # Setup CRC calculator instance. Used to check CRC of response messages
+        self.crc_calc = Crc(width=width,
+                            poly=poly,
+                            initvalue=initvalue)
+
+    def calculate_crc(self, byte_array, format_as='bytes'):
+        """
+        Calculate CRC of byte_array, return as bytes (default) or int.
+        """
+
+        self.crc_calc.reset(value=pcmd.init)
+        self.crc_calc.process(byte_array)
+        if format_as == 'bytes':
+            crc = self.crc_calc.finalbytes()
+        elif format_as == 'int':
+            crc = self.crc_calc.final()
+        else:
+            raise ValueError("format_as keyword must be 'bytes' or 'int'")
+        return crc
+
+    def check_crc(self, byte_array):
+        """
+        Check the CRC from the received response with the calculated CRC
+        of the payload. If we calculate the CRC of the payload+received CRC
+        and it equals 0, then we know that the data is OK (up to whatever %
+        the bit error rate is for the CRC algorithm being used).
+
+        True: CRC OK
+        False: CRC NG
+        """
+
+        crc = self.calculate_crc(byte_array, 'int')
+        if crc != 0:
+            # Data is invalid/corrupted
+            return False
+        else:
+            return True
