@@ -112,6 +112,7 @@ class TempLogger(Thread):
     def run(self):
         logging.info('############### Started templogger ###############')
         while self.stop_thread != 1:
+            # TO DO: support for multiple devices
             command = pcmd.micro_commands.get('temp', None)
             self.socket.send(command)
             logging.debug('Requesting temperature')
