@@ -114,7 +114,12 @@ class TempLogger(Thread):
         while self.stop_thread != 1:
             # TO DO: support for multiple devices
             command = pcmd.micro_commands.get('temp', None)
-            self.socket.send(command)
+
+            try:
+                message_tracker = self.socket.send(command, copy=False, track=True)
+            except zmq.ZMQError:
+                logging.error("ZMQ send failed")
+
             logging.debug('Requesting temperature')
             response = self.socket.recv()  # blocks until response is found
             logging.debug('Response received: %s', helpers.print_bytearray(response))
