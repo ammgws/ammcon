@@ -151,6 +151,7 @@ class TempLogger(Thread):
                 if self.stop_thread:
                     logging.debug('Templogger thread stop trigger received, breaking out of sleep loop')
                     break
+            logging.debug('still inside while loop')
 
         logging.debug('Templogger thread stop trigger received, stopping while loop')
 
