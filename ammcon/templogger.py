@@ -33,7 +33,7 @@ class Device(Base):
 
     id = Column(Integer, primary_key=True)
     device_id = Column(Integer, nullable=False, unique=True)
-    device_desc = Column(String(255))
+    device_desc = Column(String(255), default="Device ID {}".format(device_id), unique=True)
 
     # Define relationships
     device_data = relationship('Temperature', back_populates='device')
@@ -51,7 +51,7 @@ class Temperature(Base):
     device_id = Column(Integer, ForeignKey('device.id'))  # __tablename__ is 'device', column is 'id'
     temperature = Column(Float)
     humidity = Column(Float)
-    datetime = Column(DateTime, default=dt.datetime.utcnow)
+    datetime = Column(DateTime(timezone=True), default=dt.datetime.utcnow)  # store as UTC time
 
     # Define relationships
     device = relationship('Device', back_populates='device_data')
@@ -133,6 +133,7 @@ class TempLogger(Thread):
                     temperature=temp,
                     humidity=humidity
                 )
+
                 session = Session()
                 try:
                     session.add(data_log)
