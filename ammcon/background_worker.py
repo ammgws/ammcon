@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import os.path
 from argparse import ArgumentParser
+from time import sleep
 # Ammcon imports
 from ammcon.serialmanager import SerialManager, VirtualSerialManager
 from ammcon.templogger import TempLogger
@@ -36,8 +37,8 @@ def main(arguments):
                                                        maxBytes=5242880,
                                                        backupCount=3)
     log_format = logging.Formatter(
-        fmt='%(asctime)s.%(msecs).03d %(name)-12s %(levelname)-8s %(message)s (%(filename)s:%(lineno)d)',
-        datefmt='%Y-%m-%d %H:%M:%S')
+        fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s (%(filename)s:%(lineno)d)',
+        datefmt=None)
     log_handler.setFormatter(log_format)
     logger.addHandler(log_handler)
 
@@ -47,6 +48,11 @@ def main(arguments):
 
     temp_logger = TempLogger(interval=60)
     temp_logger.start()
+
+    while True:
+        print(temp_logger.is_alive())
+        logging.debug('still alive')
+        sleep(5)
 
 if __name__ == '__main__':
     from sys import argv
