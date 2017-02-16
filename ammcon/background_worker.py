@@ -49,10 +49,13 @@ def main(arguments):
     temp_logger = TempLogger(interval=60)
     temp_logger.start()
 
-    while True:
-        print(temp_logger.is_alive())
+    while temp_logger.is_alive():
+        print('still alive')
         logging.debug('still alive')
         sleep(5)
+
+
+
 
 if __name__ == '__main__':
     from sys import argv

@@ -104,7 +104,7 @@ class TempLogger(Thread):
         # Connect to zeroMQ REQ socket, used to communicate with serial port
         # to do: handle disconnections somehow (though if background serial worker
         # fails then we're screwed anyway)
-        context = zmq.Context()
+        context = zmq.Context().instance()
         self.socket = context.socket(zmq.REQ)
         self.socket.connect('tcp://localhost:5555')
         logging.info('############### Connected to zeroMQ server ###############')
@@ -113,9 +113,11 @@ class TempLogger(Thread):
         logging.info('############### Started templogger ###############')
         while self.stop_thread != 1:
             # TO DO: support for multiple devices
+            logging.debug('116')
             command = pcmd.micro_commands.get('temp', None)
 
             try:
+                logging.debug('120')
                 message_tracker = self.socket.send(command, copy=False, track=True)
             except zmq.ZMQError:
                 logging.error("ZMQ send failed")
@@ -126,6 +128,7 @@ class TempLogger(Thread):
 
             # TO DO: fix kludges
             if not response == 'invalid CRC'.encode():
+                logging.debug('131')
                 temp, humidity = helpers.temp_val(response)
 
                 data_log = Temperature(
@@ -136,12 +139,14 @@ class TempLogger(Thread):
 
                 session = Session()
                 try:
+                    logging.debug('142')
                     session.add(data_log)
                     session.commit()
                 except Exception as err:
                     session.rollback()
                     logging.error('Failed to write to DB, %s' % err)
                 finally:
+                    logging.debug('149')
                     session.close()
             else:
                 logging.info("invalid CRC - not logging")
