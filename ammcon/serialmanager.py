@@ -35,7 +35,7 @@ class SerialManager(Thread):
                             initvalue=pcmd.init)
 
         # Setup zeroMQ REP socket for receiving commands
-        context = zmq.Context()
+        context = zmq.Context().instance()
         self.socket = context.socket(zmq.REP)
         self.socket.bind("tcp://*:5555")
 
