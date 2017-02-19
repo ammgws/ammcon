@@ -5,28 +5,21 @@ import datetime as dt
 import logging
 import logging.handlers
 import os.path
-from argparse import ArgumentParser
 from time import sleep
+# Third party imports
+import click
+import zmq
+from zmq.devices import ThreadDevice
 # Ammcon imports
 from ammcon.serialmanager import SerialManager, VirtualSerialManager
 from ammcon.templogger import TempLogger
 from ammcon.config import LOG_PATH, SERIAL_PORT
 
 
-def main(arguments):
-    """Setup and start serial port manager thread."""
-
-    # Get command line arguments
-    parser = ArgumentParser(description='Run Ammcon serial port worker.')
-    parser.add_argument('-d', '--dev',
-                        dest='dev', action='store_const',
-                        const=1, default=0,
-                        help='Use virtual serial port for development.')
-    args = parser.parse_args(arguments)
-
-    # Configure root logger. Level 5 = verbose to catch mostly everything.
+def setup_logging(log_level=logging.DEBUG):
+    # Configure root logger.
     logger = logging.getLogger()
-    logger.setLevel(level=5)
+    logger.setLevel(level=log_level)
 
     if not os.path.exists(LOG_PATH):
         os.makedirs(LOG_PATH, exist_ok=True)
@@ -42,22 +35,35 @@ def main(arguments):
     log_handler.setFormatter(log_format)
     logger.addHandler(log_handler)
 
+
+@click.command()
+@click.option('--dev', is_flag=True, help='Enables development mode (simulated serial port)')
+def main(dev):
+    """Setup and start serial port manager thread."""
+
+    setup_logging()
+
+    device = ThreadDevice(zmq.QUEUE, zmq.ROUTER, zmq.DEALER)
+    device.bind_in('tcp://*:5555')
+    device.connect_out('tcp://127.0.0.1:12543')
+    device.setsockopt_in(zmq.IDENTITY, 'ROUTER')
+    device.setsockopt_out(zmq.IDENTITY, 'DEALER')
+    device.start()
+
     logging.info('########### Starting Ammcon serial worker ###########')
-    serial_port = SerialManager(SERIAL_PORT) if not args.dev else VirtualSerialManager(SERIAL_PORT)
+    serial_port = SerialManager(SERIAL_PORT) if not dev else VirtualSerialManager(SERIAL_PORT)
     serial_port.start()
 
     temp_logger = TempLogger(interval=60)
     temp_logger.start()
 
-    while temp_logger.is_alive():
-        print('still alive')
-        logging.debug('still alive')
-        sleep(5)
+    temp_logger.join()
+    print('temp logger ended')
+    logging.debug('temp logger ended')
 
-
+    serial_port.join()
 
 
 if __name__ == '__main__':
-    from sys import argv
-    main(argv[1:])
+    main()
 

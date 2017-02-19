@@ -15,6 +15,7 @@ setup(
     license=license_text,
     zip_safe=False,
     install_requires=[
+        'click',
         'crccheck>=0.6',
         'marshmallow',
         'marshmallow_sqlalchemy',
