@@ -138,9 +138,9 @@ class TempLogger(Thread):
                 )
 
                 session = Session()
+                session.add(data_log)
                 try:
                     logging.debug('142')
-                    session.add(data_log)
                     session.commit()
                 except Exception as err:
                     session.rollback()
