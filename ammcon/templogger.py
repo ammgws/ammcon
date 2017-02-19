@@ -17,6 +17,9 @@ import ammcon.h_bytecmds as pcmd
 import ammcon.helpers as helpers
 from ammcon import LOCAL_PATH
 
+import resource
+print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
 # Setup database
 # TO DO: restructure code.
 database_uri = 'sqlite:///{}'.format(os.path.join(LOCAL_PATH, 'devices_db.sqlite'))
@@ -108,10 +111,13 @@ class TempLogger(Thread):
         self.socket = context.socket(zmq.REQ)
         self.socket.connect('tcp://localhost:5555')
         logging.info('############### Connected to zeroMQ server ###############')
+        print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     def run(self):
         logging.info('############### Started templogger ###############')
+        print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
         while self.stop_thread != 1:
+            print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
             # TO DO: support for multiple devices
             logging.debug('116')
             command = pcmd.micro_commands.get('temp', None)
