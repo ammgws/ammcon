@@ -120,9 +120,9 @@ class TempLogger(Thread):
                 logging.debug('120')
                 message_tracker = self.socket.send(command, copy=False, track=True)
             except zmq.ZMQError:
-                logging.error("ZMQ send failed")
+                logging.error("ZMQ send failed.")
 
-            logging.debug('Requesting temperature')
+            logging.debug('Requesting temperature.')
             response = self.socket.recv()  # blocks until response is found
             logging.debug('Response received: %s', helpers.print_bytearray(response))
 
@@ -144,22 +144,21 @@ class TempLogger(Thread):
                     session.commit()
                 except Exception as err:
                     session.rollback()
-                    logging.error('Failed to write to DB, %s' % err)
+                    logging.error('Failed to write to DB, %s.' % err)
                 finally:
                     logging.debug('149')
                     session.close()
             else:
-                logging.info("invalid CRC - not logging")
+                logging.info("Invalid CRC - not logging.")
 
             # Break logging interval into 1sec sleeps so don't have to wait too long when quitting thread.
             for _ in range(self.interval):
-                sleep(1)
                 if self.stop_thread:
-                    logging.debug('Templogger thread stop trigger received, breaking out of sleep loop')
+                    logging.debug('Templogger thread stop trigger received, breaking out of sleep loop.')
                     break
-            logging.debug('still inside while loop')
+                sleep(1)
 
-        logging.debug('Templogger thread stop trigger received, stopping while loop')
+        logging.debug('Templogger thread stop trigger received, stopping while loop.')
 
     def stop(self):
         self.stop_thread = 1
