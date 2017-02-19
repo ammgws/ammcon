@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-
 # Python Standard Library imports
 import datetime as dt
 import logging
 import logging.handlers
 import os.path
-from time import sleep
 # Third party imports
 import click
 import zmq
@@ -36,6 +34,21 @@ def setup_logging(log_level=logging.DEBUG):
     logger.addHandler(log_handler)
 
 
+def setup_zmq(frontend_port, backend_port):
+    device = ThreadDevice(device_type=zmq.QUEUE, in_type=zmq.ROUTER, out_type=zmq.DEALER)
+    device.bind_in("tcp://127.0.0.1:{}".format(frontend_port))
+    device.bind_out("tcp://127.0.0.1:{}".format(backend_port))
+    # Set high water mark to 1 to set constraint on req/rep pattern
+    device.setsockopt_in(zmq.SNDHWM, 1)
+    device.setsockopt_out(zmq.RCVHWM, 1)
+
+    # neccesary??
+    # device.setsockopt_in(zmq.IDENTITY, b'ROUTER')
+    # device.setsockopt_out(zmq.IDENTITY, b'DEALER')
+
+    return device
+
+
 @click.command()
 @click.option('--dev', is_flag=True, help='Enables development mode (simulated serial port)')
 def main(dev):
@@ -43,12 +56,10 @@ def main(dev):
 
     setup_logging()
 
-    device = ThreadDevice(zmq.QUEUE, zmq.ROUTER, zmq.DEALER)
-    device.bind_in('tcp://*:5555')
-    device.connect_out('tcp://127.0.0.1:12543')
-    device.setsockopt_in(zmq.IDENTITY, 'ROUTER')
-    device.setsockopt_out(zmq.IDENTITY, 'DEALER')
-    device.start()
+    frontend_port = 5555
+    backend_port = 6666
+    device = setup_zmq(frontend_port, backend_port)
+    device.start()  # start ZMQ device thread
 
     logging.info('########### Starting Ammcon serial worker ###########')
     serial_port = SerialManager(SERIAL_PORT) if not dev else VirtualSerialManager(SERIAL_PORT)
@@ -62,6 +73,7 @@ def main(dev):
     logging.debug('temp logger ended')
 
     serial_port.join()
+    device.join()
 
 
 if __name__ == '__main__':

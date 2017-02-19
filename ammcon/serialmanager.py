@@ -28,6 +28,7 @@ class SerialManager(Thread):
         """
         Thread.__init__(self)
         self.daemon = False  # Need thread to block
+        self.stop_thread = 0  # Flag used to gracefully exit thread
 
         # Setup CRC calculator instance. Used to check CRC of response messages
         self.crc_calc = CRC(width=8,
@@ -37,7 +38,7 @@ class SerialManager(Thread):
         # Setup zeroMQ REP socket for receiving commands
         context = zmq.Context().instance()
         self.socket = context.socket(zmq.REP)
-        self.socket.bind("tcp://*:5555")
+        self.socket.connect("tcp://127.0.0.1:6666")
 
         self.ser = self.open_serial_port(port)
 
@@ -49,7 +50,7 @@ class SerialManager(Thread):
 
     def run(self):
         # Keep looping, waiting for next request from zeromq client
-        while True:
+        while self.stop_thread != 1:
             # Wait for next request from client (on ZMQ socket)
             command = self.socket.recv()
             logging.debug('Received command in queue: %s', command)
@@ -78,6 +79,9 @@ class SerialManager(Thread):
 
             # Send response back to client
             self.socket.send(response)
+
+    def stop(self):
+        self.stop_thread = 1
 
     @staticmethod
     def open_serial_port(port):
