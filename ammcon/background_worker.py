@@ -56,10 +56,11 @@ def main(dev):
 
     setup_logging()
 
+    # Setup and start ZMQ device thread.
     frontend_port = 5555
     backend_port = 6666
     device = setup_zmq(frontend_port, backend_port)
-    device.start()  # start ZMQ device thread
+    device.start()
 
     logging.info('########### Starting Ammcon serial worker ###########')
     serial_port = SerialManager(SERIAL_PORT) if not dev else VirtualSerialManager(SERIAL_PORT)
@@ -69,7 +70,6 @@ def main(dev):
     temp_logger.start()
 
     temp_logger.join()
-    print('temp logger ended')
     logging.debug('temp logger ended')
 
     serial_port.join()

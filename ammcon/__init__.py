@@ -10,7 +10,6 @@ from ammcon.models import Base
 LOCAL_PATH = os.environ.get('AMMCON_LOCAL', default=os.path.join(os.path.expanduser("~"), '.ammcon'))
 print("Ammcon config dir: {}".format(LOCAL_PATH))
 
-
 # Setup database
 # TO DO: restructure code.
 database_uri = 'sqlite:///{}'.format(os.path.join(LOCAL_PATH, 'devices_db.sqlite'))
