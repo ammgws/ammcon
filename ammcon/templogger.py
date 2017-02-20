@@ -57,25 +57,35 @@ class TempLogger(Thread):
             # TO DO: fix kludges
             if not response == 'invalid CRC'.encode():
                 logging.debug('59')
-                temp, humidity = helpers.temp_val(response)
-
-                data_log = Temperature(
-                    device_id=1,
-                    temperature=temp,
-                    humidity=humidity
-                )
-
-                session = Session()
-                session.add(data_log)
                 try:
-                    logging.debug('71')
-                    session.commit()
-                except Exception as err:
-                    session.rollback()
-                    logging.error('Failed to write to DB, %s.' % err)
-                finally:
-                    logging.debug('77')
-                    session.close()
+                    temp, humidity = helpers.temp_val(response)
+                except Exception as e:
+                    # TO DO: fix this kludge
+                    # templogger gets non-temp response back from microcontroller
+                    # ZMQ is on a strict recv/send pattern so it's highly unlikely to be ZMQ messing up destinations
+                    # possibly to do with microcontroller or the serial buffer?
+                    logging.debug('fack %s' % e)
+                    temp = None
+                    humidity = None
+
+                if temp is not None:
+                    data_log = Temperature(
+                        device_id=1,
+                        temperature=temp,
+                        humidity=humidity
+                    )
+
+                    session = Session()
+                    session.add(data_log)
+                    try:
+                        logging.debug('71')
+                        session.commit()
+                    except Exception as err:
+                        session.rollback()
+                        logging.error('Failed to write to DB, %s.' % err)
+                    finally:
+                        logging.debug('77')
+                        session.close()
             else:
                 logging.info("Invalid CRC - not logging.")
 
