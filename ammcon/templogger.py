@@ -10,8 +10,6 @@ import ammcon.helpers as helpers
 from ammcon import Session
 from ammcon.models import Temperature
 
-import resource
-
 
 class TempLogger(Thread):
     """Get current temperature and log to database."""
@@ -32,20 +30,15 @@ class TempLogger(Thread):
         self.socket = context.socket(zmq.REQ)
         self.socket.connect('tcp://127.0.0.1:5555')
         logging.info('############### Connected to zeroMQ server ###############')
-        print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-        logging.debug('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     def run(self):
         logging.info('############### Started templogger ###############')
         while self.stop_thread != 1:
-            print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-            logging.debug('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
             # TO DO: support for multiple devices
-            logging.debug('44')
             command = pcmd.micro_commands.get('temp', None)
 
             try:
-                logging.debug('48')
+                # TO DO: use ZMQ message tracker?
                 message_tracker = self.socket.send(command, copy=False, track=True)
             except zmq.ZMQError:
                 logging.error("ZMQ send failed.")
@@ -56,7 +49,6 @@ class TempLogger(Thread):
 
             # TO DO: fix kludges
             if not response == 'invalid CRC'.encode():
-                logging.debug('59')
                 try:
                     temp, humidity = helpers.temp_val(response)
                 except Exception as e:
@@ -78,13 +70,11 @@ class TempLogger(Thread):
                     session = Session()
                     session.add(data_log)
                     try:
-                        logging.debug('71')
                         session.commit()
                     except Exception as err:
                         session.rollback()
                         logging.error('Failed to write to DB, %s.' % err)
                     finally:
-                        logging.debug('77')
                         session.close()
             else:
                 logging.info("Invalid CRC - not logging.")
