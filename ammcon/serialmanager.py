@@ -70,7 +70,7 @@ class SerialManager(Thread):
             # [HDR] [ACK] [DESC] [PAYLOAD] [CRC] [END]
             # 1byte 1byte 2bytes <18bytes  1byte 1byte
             response = self.destuff_bytes(raw_response, method='PPP')
-            logging.debug('Destuffed response: %s', helpers.print_bytearray(response))
+            logging.debug('Destuffed   : %s', helpers.print_bytearray(response))
 
             # Check CRC of destuffed command
             if not self.crc_calc.check_crc(response[4:-1]):
@@ -358,6 +358,7 @@ class CRC(object):
     def calculate_crc(self, byte_array, format_as='bytes'):
         """
         Calculate CRC of byte_array, return as bytes (default) or int.
+        TO DO: rename 'format_as' to 'return_as'
         """
 
         self.crc_calc.reset(value=pcmd.init)
