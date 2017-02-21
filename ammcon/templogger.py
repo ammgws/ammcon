@@ -45,7 +45,7 @@ class TempLogger(Thread):
 
             logging.debug('Requesting temperature.')
             response = self.socket.recv()  # blocks until response is found
-            logging.debug('Response received: %s', helpers.print_bytearray(response))
+            logging.debug('Received    : %s', helpers.print_bytearray(response))
 
             # TO DO: fix kludges
             if not response == 'invalid CRC'.encode():
