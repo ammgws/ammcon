@@ -62,14 +62,15 @@ class SerialManager(Thread):
 
             # Read in response from microcontroller
             # raw_response = self.get_response()  # unreliable
-            raw_response = self.get_response_until(pcmd.end)  # may block forever
+            raw_response = self.get_response_until()  # may block forever
             logging.debug('Raw response: %s', helpers.print_bytearray(raw_response))
 
             # Destuff response
             # Response should be in the following format:
             # [HDR] [ACK] [DESC] [PAYLOAD] [CRC] [END]
             # 1byte 1byte 2bytes <18bytes  1byte 1byte
-            response = self.destuff_bytes(raw_response, method='PPP')
+            #response = self.destuff_bytes(raw_response, method='PPP')
+            response = raw_response
             logging.debug('Destuffed   : %s', helpers.print_bytearray(response))
 
             # Check CRC of destuffed command
@@ -114,7 +115,7 @@ class SerialManager(Thread):
             logging.error('Serial port not open - unable to read.')
         return read_byte
 
-    def get_response_until(self, end_flag):
+    def get_response_until(self):
         """
         Read from serial input buffer until end_flag byte is received.
         Note: for some reason pyserial's timeout doesn't work on these read
@@ -125,11 +126,26 @@ class SerialManager(Thread):
         # TO DO: rewrite this as it will end prematurely if data byte contains end flag
 
         recvd_command = b''
-        while True:
+        state = "WAIT_HDR"
+        while state != "RECV_END":
             in_byte = self.ser.read(size=1)
-            recvd_command = recvd_command + in_byte
-            if in_byte == end_flag:
-                break
+
+            if state == "WAIT_HDR":
+                if in_byte == pcmd.hdr:
+                    recvd_command += in_byte
+                    state = "IN_MSG"
+            elif state == "IN_MSG":
+                if in_byte == pcmd.esc:
+                    state = "RECV_ESC"
+                elif in_byte == pcmd.end:
+                    recvd_command += in_byte
+                    state = "RECV_END"
+                else:
+                    recvd_command += in_byte
+            elif state == "RECV_ESC":
+                recvd_command += in_byte
+                state = "IN_MSG"
+
         return recvd_command
 
     def get_response(self):
@@ -298,6 +314,7 @@ class VirtualSerialPort(object):
         # Set sample payload for temperature command
         if ord(data[1:2]) in range(ord(b'\xD0'), ord(b'\xDF')):
             ack = pcmd.ack
+            #payload = self._generate_temp_payload(temp1=19, temp2=25, humidity=38)
             payload = self._generate_temp_payload()
         # Set sample payload for light command
         elif ord(data[1:2]) in range(ord(b'\xB0'), ord(b'\xBF')):
@@ -311,7 +328,7 @@ class VirtualSerialPort(object):
         # Calculate CRC for command
         crc = self.crc_calc.calculate_crc(payload)
 
-        self._received = pcmd.hdr + ack + bytes([data[1]]) + bytes([data[2]]) + payload + crc + pcmd.end
+        self._received = pcmd.hdr + ack + self._stuff_bytes_ppp(bytes([data[1]]) + bytes([data[2]]) + payload + crc) + pcmd.end
         logging.debug('Response (virtual): %s', helpers.print_bytearray(self._received))
 
     def read(self, size):
@@ -337,6 +354,24 @@ class VirtualSerialPort(object):
         # To invert the byte, first convert byte string to integer,
         # and then mask it to get the lower 16 bits, then convert back to byte string
         return bytes([~data[2] & 0xFF])
+
+    @staticmethod
+    def _stuff_bytes_ppp(byte_array):
+        """
+        Performs PPP-style byte-stuffing on the input byte array.
+        Bytes equal to the header, escape or end flag bytes will be escaped.
+        """
+        stuffed_array = b''
+
+        for b in byte_array:
+            hb = bytes([b])
+            if hb not in [pcmd.hdr, pcmd.esc, pcmd.end]:
+                stuffed_array += hb
+            else:
+                stuffed_array += pcmd.esc
+                stuffed_array += hb
+
+        return stuffed_array
 
     def reset_input_buffer(self):
         pass
