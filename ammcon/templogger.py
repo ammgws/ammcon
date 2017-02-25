@@ -43,6 +43,12 @@ class TempLogger(Thread):
             except zmq.ZMQError:
                 logging.error("ZMQ send failed.")
 
+            # Added (temporarily) for debugging purposes
+            n = 0
+            while not message_tracker.done:
+                logging.debug("yarp{}{}".format('temp', n))
+                n += 1
+
             logging.debug('Requesting temperature.')
             response = self.socket.recv()  # blocks until response is found
             logging.debug('Received    : %s', helpers.print_bytearray(response))
