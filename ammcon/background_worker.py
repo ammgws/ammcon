@@ -27,6 +27,7 @@ def setup_logging(log_level=logging.DEBUG):
     log_handler = logging.handlers.RotatingFileHandler(log_fullpath,
                                                        maxBytes=5242880,
                                                        backupCount=3)
+    # TO DO: change to UTC time (utcnow) instead of local time (asctime)?
     log_format = logging.Formatter(
         fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s (%(filename)s:%(lineno)d)',
         datefmt=None)
