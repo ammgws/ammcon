@@ -37,16 +37,11 @@ def setup_logging(log_level=logging.DEBUG):
 
 def setup_zmq(frontend_port, backend_port):
     device = ThreadDevice(device_type=zmq.QUEUE, in_type=zmq.ROUTER, out_type=zmq.DEALER)
-    device.bind_in("tcp://127.0.0.1:{}".format(frontend_port))
-    device.bind_out("tcp://127.0.0.1:{}".format(backend_port))
     # Set high water mark to 1 to set constraint on req/rep pattern
     device.setsockopt_in(zmq.SNDHWM, 1)
     device.setsockopt_out(zmq.RCVHWM, 1)
-
-    # neccesary??
-    # device.setsockopt_in(zmq.IDENTITY, b'ROUTER')
-    # device.setsockopt_out(zmq.IDENTITY, b'DEALER')
-
+    device.bind_in("tcp://127.0.0.1:{}".format(frontend_port))
+    device.bind_out("tcp://127.0.0.1:{}".format(backend_port))
     return device
 
 
