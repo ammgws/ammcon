@@ -264,6 +264,8 @@ class SerialManager(Thread):
 
         # Calculate CRC for command
         crc = self.crc_calc.calculate_crc(command)
+        # Perform byte stuffing on CRC byte
+        crc = self.stuff_bytes(crc, method='PPP')
 
         # Build up command byte array
         command_array = pcmd.hdr + command + crc + pcmd.end
