@@ -1,3 +1,5 @@
+NOTE: Project no longer maintained as have moved to Home Assistant.
+
 # ammcon
 
 Ammcon server script for my personal use
